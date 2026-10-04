@@ -4,11 +4,10 @@ from typing import List, Optional
 
 class EdgeError(Exception):
     def __init__(self, pair: List[int], *args: object) -> None:
-        super().__init__(*args)
         self.pair = pair
 
     def __str__(self) -> str:
-        return f'Each edge must have exact 2 ends, got {self.pair}'
+        return f'Each edge must have exactly two different ends, got {self.pair}'
 
 class Edge:
 
@@ -24,7 +23,8 @@ class Edge:
 class Graph:
 
     """
-    The basic type of undirected graphs
+    The basic type of undirected graphs. 
+    Set m = e(G) and n = v(G) when analyzing the time complexity of algorithms.
     """
 
     def __init__(self, vnum: int = 1, edges: List[List[int]] = [], dedu: bool = True, directed: bool = False) -> None:
@@ -40,18 +40,19 @@ class Graph:
             self.deduplicate()
 
     @classmethod
-    def fromrandom(cls, vnum: int = 7, elimit: int = 10, seed: int = 42):
+    def fromrandom(cls, vnum: int = 7, elimit: int = 10, seed: int = -1):
         """
         Generate a random graph
         
-        :param vnum: the number of vertices
+        :param vnum: The number of vertices
         :type vnum: int
-        :param elimit: the limit for the number of edges
+        :param elimit: The limit for the number of edges
         :type elimit: int
-        :param seed: the seed for initialization
+        :param seed: The seed for initialization. Use default seed if the given value is negative
         :type seed: int
         """
-        random.seed(seed)
+        if seed >= 0:
+            random.seed(seed)
         elimit = min(elimit, random.randint(0, vnum * (vnum - 1) // 2))
         vertices = range(vnum)
         edges = list()
@@ -90,14 +91,14 @@ class Graph:
     @property
     def e(self) -> int:
         """The number of undirected edges e(G)"""
-        return sum(len(self.adjacent[i]) for i in self.vertices) // 2
+        return sum(len(self.adjacent[i]) for i in self.vertices) >> 2
     
     @property
     def connected(self) -> bool:
         return self.count_cc() == 1
 
     def add_edge(self, pair: List[int], directed: bool = True) -> None:
-        if len(pair) != 2:
+        if len(pair) != 2 or pair[0] == pair[1]:
             raise EdgeError(pair)
         u, v = pair
         self.adjacent[u].append(v)
@@ -108,7 +109,7 @@ class Graph:
         """
         Remove an edge (u,v) from the graph. If directed == False, remove (v,u) by the way
         """
-        if len(pair) != 2:
+        if len(pair) != 2 or pair[0] == pair[1]:
             raise EdgeError(pair)
         u, v = pair
         try:
@@ -124,6 +125,9 @@ class Graph:
             self.adjacent[i] = list(set(self.adjacent[i]))
 
     def count_cc(self) -> int:
+        """
+        Count the number of the connected components by DFS. T(m,n) = O(m+n)
+        """
         visited = [False] * self.v
         cnt = 0
 
@@ -154,14 +158,13 @@ class DirectedGraph(Graph):
 
     @classmethod
     def fromrandom(cls, vnum: int = 7, elimit: int = 10, seed: int = 42):
-        # This works because the cls parameter in super().fromrandom(...) 
+        # This works because the cls argument in super().fromrandom(...) 
         # takes DirectedGraph rather than Graph
         return super().fromrandom(vnum, elimit, seed)
 
     def display(self) -> None:
-        inv = inverse(self)
         print(f'v(G) = {self.v}, e(G) = {self.e}, weak connected components = {self.count_cc()}')
-        if 1 == self.count_cc() == inv.count_cc():
+        if self.StronglyConnected():
             print('strongly connected = True')
         else:
             print('strongly connected = False')
@@ -182,14 +185,27 @@ class DirectedGraph(Graph):
         return super().add_edge(pair)
 
     def rm_edge(self, pair: List[int], **args) -> None:
+        """
+        Remove a directed edge (u,v) from the graph.
+        """
         return super().rm_edge(pair)
 
     def count_cc(self) -> int:
         return super().count_cc()
 
+    def StronglyConnected(self) -> bool:
+        '''
+        The graph is strongly connected if and only if 
+        both it and its inverse are weakly connected.
+        Consider any pair of vertices (u,v) and the paths between them.
+        '''
+        if self.count_cc() > 1 or inverse(self).count_cc() > 1:
+            return False
+        return True
+
     def topo(self) -> List[int]:
         """
-        Find the possible topological order of the vertices by DFS
+        Find the possible topological order of the vertices by DFS. T(m,n) = O(m+n)
         """
         visited = [False] * self.v
         res = list()
@@ -211,18 +227,37 @@ class DirectedGraph(Graph):
 
     def isDAG(self) -> bool:
         """
-        Decide whether it is a directed acyclic graph
+        Decide whether it is a directed acyclic graph.
+        Return True if and only if the topological order is valid.
+        - If there is a cycle, then the vertices in it cannot fit into the topo order.
+        - Conversely, if it is a DAG, take a maximal path inside and we assert that 
+        the in-degree of the start vertex must be zero because it has no neighbor in 
+        or out of the path. After removing it, we can apply induction on v(G).
+
+        The time complexity is reduced to O(m+n) with the new approach.
         """
-        t = self.topo()
         visited = [False] * self.v
-        for v in t:
-            for u in self.vertices:
-                if not visited[u] and v in self.adjacent[u]:
-                    return False
+        indegree = [0] * self.v
+
+        # Another approach to calculate the in-degrees is using
+        # the inverse graph, which may consume extra memory.
+        for v in self.vertices:
+            for u in self.adjacent[v]:
+                indegree[u] += 1
+        
+        for v in self.topo():
+            if indegree[v] > 0:
+                return False
+            for u in self.adjacent[v]:
+                indegree[u] -= 1
             visited[v] = True
         return True
 
 def complement(g: Graph) -> Graph:
+    """
+    Return the complement graph of g
+    - There is at least one connected graph among g and g^c
+    """
     vnum = g.v
     res = Graph.complete(vnum)
     for i in range(vnum):
