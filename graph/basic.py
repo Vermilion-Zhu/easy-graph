@@ -91,7 +91,7 @@ class Graph:
     @property
     def e(self) -> int:
         """The number of undirected edges e(G)"""
-        return sum(len(self.adjacent[i]) for i in self.vertices) >> 2
+        return sum(len(self.adjacent[i]) for i in self.vertices) >> 1
     
     @property
     def connected(self) -> bool:
@@ -146,6 +146,38 @@ class Graph:
 
         return cnt
 
+    def getindeg(self) -> List[int]:
+        """
+        Get the in-degree of each vertex in V(G)
+        """
+        indegree = [0] * self.v
+        for v in self.vertices:
+            for u in self.adjacent[v]:
+                indegree[u] += 1
+        return indegree
+
+    def NoOddCycle(self) -> bool:
+        """
+        Decide whether it contains no odd cycle.
+        Return True if and only if the graph is bipartite.
+        """
+        # Color the vertices greedily
+        colored = [0] * self.v
+        colored[0] = 1
+        q = list()
+        q.append(0)
+
+        while q:
+            v = q.pop(0)
+            c = colored[v]
+            for u in self.adjacent[v]:
+                if colored[u] == 0:
+                    colored[u] = - c
+                    q.append(u)
+                elif colored[u] == c:
+                    return False
+        return True
+
 
 class DirectedGraph(Graph):
 
@@ -163,8 +195,9 @@ class DirectedGraph(Graph):
         return super().fromrandom(vnum, elimit, seed)
 
     def display(self) -> None:
-        print(f'v(G) = {self.v}, e(G) = {self.e}, weak connected components = {self.count_cc()}')
-        if self.StronglyConnected():
+        wcc = self.count_cc()
+        print(f'v(G) = {self.v}, e(G) = {self.e}, weak connected components = {wcc}')
+        if wcc == 1 and self.StronglyConnected():
             print('strongly connected = True')
         else:
             print('strongly connected = False')
@@ -192,6 +225,9 @@ class DirectedGraph(Graph):
 
     def count_cc(self) -> int:
         return super().count_cc()
+
+    def getindeg(self) -> List[int]:
+        return super().getindeg()
 
     def StronglyConnected(self) -> bool:
         '''
@@ -236,21 +272,16 @@ class DirectedGraph(Graph):
 
         The time complexity is reduced to O(m+n) with the new approach.
         """
-        visited = [False] * self.v
-        indegree = [0] * self.v
+        indegree = self.getindeg()
 
         # Another approach to calculate the in-degrees is using
         # the inverse graph, which may consume extra memory.
-        for v in self.vertices:
-            for u in self.adjacent[v]:
-                indegree[u] += 1
         
         for v in self.topo():
             if indegree[v] > 0:
                 return False
             for u in self.adjacent[v]:
                 indegree[u] -= 1
-            visited[v] = True
         return True
 
 def complement(g: Graph) -> Graph:
@@ -283,15 +314,18 @@ if __name__ == "__main__":
     # k = Graph.complete(10)
     # k.display()
 
-    # c = Graph.cycle(7)
-    # c.display()
+    c = Graph.cycle(4)
+    c.display()
+    print(c.NoOddCycle())
+    c.add_edge([0,2],False)
+    print(c.NoOddCycle())
 
-    dg = DirectedGraph.fromrandom(12,30,23938)
-    dg.display()
-    inv = inverse(dg)
-    inv.display()
+    # dg = DirectedGraph.fromrandom(12,30,23938)
+    # dg.display()
+    # inv = inverse(dg)
+    # inv.display()
 
-    t = DirectedGraph(5,[[0,1],[1,2],[3,4],[4,2]])
-    print(t.topo(), t.isDAG())
-    t.add_edge([2,0])
-    print(t.topo(), t.isDAG())
+    # t = DirectedGraph(5,[[0,1],[1,2],[3,4],[4,2]])
+    # print(t.topo(), t.isDAG())
+    # t.add_edge([2,0])
+    # print(t.topo(), t.isDAG())
