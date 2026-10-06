@@ -9,30 +9,21 @@ class EdgeError(Exception):
     def __str__(self) -> str:
         return f'Each edge must have exactly two different ends, got {self.pair}'
 
-class Edge:
-
-    """
-    The basic type of unweighted edges
-    """
-
-    def __init__(self, pair: List[int]) -> None:
-        if len(pair) != 2:
-            raise EdgeError(pair)
-        self.src, self.dst = pair
-
 class Graph:
 
     """
     The basic type of undirected graphs. 
+    Duplicated edges are allowed but not recommended.
+
     Set m = e(G) and n = v(G) when analyzing the time complexity of algorithms.
     """
 
-    def __init__(self, vnum: int = 1, edges: List[List[int]] = [], dedu: bool = True, directed: bool = False) -> None:
+    def __init__(self, vnum: int = 1, edges: List[List[int]] = [], dedu: bool = True) -> None:
         self.vertices = list(range(vnum))
         self.adjacent: List[List[int]] = [[] for _ in range(vnum)] 
 
         for pair in edges:
-            self.add_edge(pair, directed=directed)
+            self._add_edge(pair, directed=False)
         
         # It is optional to remove the duplicated edges in the adjacent matrix,
         # which may improve the efficiency in certain cases.
@@ -97,7 +88,12 @@ class Graph:
     def connected(self) -> bool:
         return self.count_cc() == 1
 
-    def add_edge(self, pair: List[int], directed: bool = True) -> None:
+    # It is annoying that if I write __add_edge here (i.e. set it to be a private method)
+    # then the derived classes cannot access it by super.__add_edge(...)
+    # Otherwise it would raise an AttributeError that the base class
+    # has no attribute '_DirectedGraph__add_edge'
+    def _add_edge(self, pair: List[int], directed: bool = True) -> None:
+        """Add a (directed) edge (u,v) to the graph"""
         if len(pair) != 2 or pair[0] == pair[1]:
             raise EdgeError(pair)
         u, v = pair
@@ -105,9 +101,10 @@ class Graph:
         if not directed:
             self.adjacent[v].append(u)
 
-    def rm_edge(self, pair: List[int], directed: bool = True) -> None:
+    def _rm_edge(self, pair: List[int], directed: bool = True) -> None:
         """
-        Remove an edge (u,v) from the graph. If directed == False, remove (v,u) by the way
+        Remove an edge (u,v) from the graph. If directed == False, remove (v,u) by the way.
+        Do nothing if the target does not exist.
         """
         if len(pair) != 2 or pair[0] == pair[1]:
             raise EdgeError(pair)
@@ -117,10 +114,20 @@ class Graph:
         except ValueError:
             pass
         if not directed:
-            self.rm_edge(pair[::-1])
+            try:
+                self.adjacent[v].remove(u)
+            except ValueError:
+                pass
 
-    
+    # The two methods below are the real interfaces exposed to the user
+    def add_edge(self, pair: List[int]) -> None:
+        self._add_edge(pair, directed=False)
+
+    def rm_edge(self, pair: List[int]) -> None:
+        self._rm_edge(pair, directed=False)
+
     def deduplicate(self) -> None:
+        """Remove the duplicated edges"""
         for i in self.vertices:
             self.adjacent[i] = list(set(self.adjacent[i]))
 
@@ -159,7 +166,7 @@ class Graph:
     def NoOddCycle(self) -> bool:
         """
         Decide whether it contains no odd cycle.
-        Return True if and only if the graph is bipartite.
+        Return True if and only if the graph is bipartite, i.e. 2-colorable.
         """
         # Color the vertices greedily
         colored = [0] * self.v
@@ -178,6 +185,16 @@ class Graph:
                     return False
         return True
 
+    def isTree(self) -> bool:
+        """
+        As for deciding whether the graph G is a tree, the following are equal:
+        - G is a connected acyclic graph (definition)
+        - G is a minimal connected graph
+        - G is a maximal acyclic graph
+        - e(G) = n - 1 and it is connected (implementation)
+        - e(G) = n - 1 and it is acyclic
+        """
+        return self.e == self.v - 1 and self.connected
 
 class DirectedGraph(Graph):
 
@@ -185,8 +202,15 @@ class DirectedGraph(Graph):
     The directed graph class, with unweighted edges
     """
 
-    def __init__(self, vnum: int = 1, edges: List[List[int]] = []) -> None:
-        super().__init__(vnum, edges, directed=True)
+    def __init__(self, vnum: int = 1, edges: List[List[int]] = [], dedu: bool = True) -> None:
+        self.vertices = list(range(vnum))
+        self.adjacent: List[List[int]] = [[] for _ in range(vnum)] 
+
+        for pair in edges:
+            self.add_edge(pair)
+
+        if dedu:
+            self.deduplicate()
 
     @classmethod
     def fromrandom(cls, vnum: int = 7, elimit: int = 10, seed: int = 42):
@@ -212,21 +236,24 @@ class DirectedGraph(Graph):
         return super().v
     @property
     def e(self) -> int:
+        """The number of directed edges in the graph"""
         return sum(len(self.adjacent[i]) for i in self.vertices)
 
-    def add_edge(self, pair: List[int], **args) -> None:
-        return super().add_edge(pair)
+    def add_edge(self, pair: List[int]) -> None:
+        """Add a directed edge."""
+        return super()._add_edge(pair)
 
-    def rm_edge(self, pair: List[int], **args) -> None:
-        """
-        Remove a directed edge (u,v) from the graph.
-        """
-        return super().rm_edge(pair)
+    def rm_edge(self, pair: List[int]) -> None:
+        """Remove a directed edge (u,v) from the graph."""
+        return super()._rm_edge(pair)
 
     def count_cc(self) -> int:
+        """Count the number of weak connected components"""
         return super().count_cc()
 
     def getindeg(self) -> List[int]:
+        # Another approach to calculate the in-degrees is using
+        # the inverse graph, which may consume extra memory.
         return super().getindeg()
 
     def StronglyConnected(self) -> bool:
@@ -244,7 +271,7 @@ class DirectedGraph(Graph):
         Find the possible topological order of the vertices by DFS. T(m,n) = O(m+n)
         """
         visited = [False] * self.v
-        res = list()
+        res: List[int] = list()
 
         def explore(v: int) -> None:
             nonlocal visited, res
@@ -270,12 +297,9 @@ class DirectedGraph(Graph):
         the in-degree of the start vertex must be zero because it has no neighbor in 
         or out of the path. After removing it, we can apply induction on v(G).
 
-        The time complexity is reduced to O(m+n) with the new approach.
+        The time complexity is reduced to O(m+n) after optimization.
         """
         indegree = self.getindeg()
-
-        # Another approach to calculate the in-degrees is using
-        # the inverse graph, which may consume extra memory.
         
         for v in self.topo():
             if indegree[v] > 0:
@@ -317,13 +341,13 @@ if __name__ == "__main__":
     c = Graph.cycle(4)
     c.display()
     print(c.NoOddCycle())
-    c.add_edge([0,2],False)
+    c.add_edge([0,2])
     print(c.NoOddCycle())
 
-    # dg = DirectedGraph.fromrandom(12,30,23938)
-    # dg.display()
-    # inv = inverse(dg)
-    # inv.display()
+    dg = DirectedGraph.fromrandom(12,30,23938)
+    dg.display()
+    inv = inverse(dg)
+    inv.display()
 
     # t = DirectedGraph(5,[[0,1],[1,2],[3,4],[4,2]])
     # print(t.topo(), t.isDAG())
