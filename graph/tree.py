@@ -1,19 +1,22 @@
-from typing import Optional, List, Sequence
+from typing import Optional, List, Sequence, Tuple
 
-# from utils import NodeError
+# from utils import NodeError # Haven't find its use till now...
 
 class bNode:
     """
     The node class for BinaryTree
     """
-
-    def __init__(self, value: int | float | str, left = None, right = None) -> None:
+    # Good news comes that I can extend the supported types of the value of a bNode
+    # by slightly modify the __init__(...) function
+    def __init__(self, value: int | float | str | Tuple[int,int], left = None, right = None) -> None:
         self.value = value
         self.left = left
         self.right = right
 
         self.father = None
 
+    # Interestingly, even though I didn't write any type hint here,
+    # mypy does not report any error.
     def add_left(self, other) -> None:
         self.left = other
         other.father = self
@@ -23,6 +26,13 @@ class bNode:
 
     def __repr__(self) -> str:
         return str(self.value)
+
+    @property
+    def degree(self) -> int:
+        return int((self.left != None) + (self.right != None) + (self.father != None))
+
+    def isLeaf(self) -> bool:
+        return self.degree == 1
 
 class BinaryTree:
     """
@@ -48,26 +58,24 @@ class BinaryTree:
             front = q.pop(0)
             if pos + 1 < len(seq):
                 pos += 1
-                next = seq[pos]
-                if next != None:
+                if (next := seq[pos]) != None:
                     front.add_left(next)
                     q.append(next)
             else:
                 break
             if pos + 1 < len(seq):
                 pos += 1
-                nnext = seq[pos]
-                if nnext != None:
+                if (nnext := seq[pos]) != None:
                     front.add_right(nnext)
                     q.append(nnext)
             else:
                 break
 
     @classmethod
-    def fromvalue(cls, values: Sequence[Optional[int|float|str]]):
+    def fromvalue(cls, values: Sequence[Optional[int | float | str]]):
         """
         Generate a binary tree from the values of its nodes.
-        Use None as a placeholder.
+        Use None as placeholders.
         """
         nodeSeq: List[Optional[bNode]] = list()
         for v in values:
@@ -78,7 +86,7 @@ class BinaryTree:
         return cls(nodeSeq)
 
     @classmethod
-    def complete(cls, values: Sequence[int|float|str]):
+    def complete(cls, values: Sequence[int | float | str]):
         """
         Return a complete binary tree, whose leaves appear at
         the same level and align to the left.
@@ -87,7 +95,7 @@ class BinaryTree:
 
     @property
     def rank(self) -> int:
-        """The rank (or 'height') of the tree."""
+        """The rank, or 'height', of the tree."""
         def height(n: bNode) -> int:
             if n.left == None:
                 if n.right == None:
@@ -125,8 +133,9 @@ class BinaryTree:
             print(f"Level {i+1}: ", layers[i])
         print('-' * 10)
 
-    def preorder(self) -> List[bNode]:
-        """Traverse the tree in pre-order, which determines a unique binary tree"""
+    def preOrder(self) -> List[bNode]:
+        """Traverse the tree in pre-order (root-left-right), which determines a unique binary tree"""
+        # Implemented by using a stack
         stk: List[bNode] = list()
         res: List[bNode] = list()
 
@@ -140,14 +149,59 @@ class BinaryTree:
                 stk.append(top.left)
         return res
 
+    def midOrder(self) -> List[bNode]:
+        """Traverse the tree in mid-order (left-root-right), which is implemented by recursion."""
+        res: List[bNode] = list()
 
+        def mid(n: bNode) -> None:
+            nonlocal res
+            if n.left != None:
+                mid(n.left)
+            res.append(n)
+            if n.right != None:
+                mid(n.right)
+
+        mid(self.root)
+        return res
+
+    def postOrder(self) -> List[bNode]:
+        """Traverse the tree in post-order (left-right-root), which is implemented by recursion."""
+        res: List[bNode] = list()
+
+        def post(n: bNode) -> None:
+            nonlocal res
+            if n.left != None:
+                post(n.left)
+            if n.right != None:
+                post(n.right)
+            res.append(n)
+
+        post(self.root)
+        return res
+
+    def levelTraverse(self) -> List[bNode]:
+        """Traverse the tree level by level."""
+        res: List[bNode] = list()
+        q: List[bNode] = list()
+
+        q.append(self.root)
+        while q:
+            front = q.pop(0)
+            res.append(front)
+            if front.left != None:
+                q.append(front.left)
+            if front.right != None:
+                q.append(front.right)
+        return res
 
 if __name__ == "__main__":
     seq = [1,2,3,4,None,5,6,None,None,7,None,None,8]
     bt = BinaryTree.fromvalue(seq)
     bt.display()
-    print(bt.preorder())
+    print(bt.preOrder())
+    print(bt.midOrder())
+    print(bt.levelTraverse())
 
     bc = BinaryTree.complete(list(range(1,16)))
     bc.display()
-    print(bc.preorder())
+    print(bc.preOrder())

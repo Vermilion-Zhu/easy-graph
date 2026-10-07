@@ -1,11 +1,12 @@
 import random
-import pprint as pp
-from typing import List, Optional
+from pprint import pp
+from typing import List, Dict, Tuple
 
 from utils import EdgeError
 
-class Graph:
+DELIMITER = '-' * 10
 
+class Graph:
     """
     The basic type of undirected graphs. 
     Duplicated edges are allowed but not recommended.
@@ -13,7 +14,7 @@ class Graph:
     Set m = e(G) and n = v(G) when analyzing the time complexity of algorithms.
     """
 
-    def __init__(self, vnum: int = 1, edges: List[List[int]] = [], dedu: bool = True) -> None:
+    def __init__(self, vnum: int = 1, edges: List[Tuple[int,int]] = [], dedu: bool = True) -> None:
         self.vertices = list(range(vnum))
         self.adjacent: List[List[int]] = [[] for _ in range(vnum)] 
 
@@ -43,7 +44,10 @@ class Graph:
         vertices = range(vnum)
         edges = list()
         for i in range(elimit):
-            edges.append(random.sample(vertices, k=2))
+            # This unnecessary step is the result of
+            # giving in to the static type checker...
+            l = random.sample(vertices, k=2)
+            edges.append((l[0], l[1]))
         return cls(vnum, edges)
 
     @classmethod
@@ -51,7 +55,7 @@ class Graph:
         """
         Generate a complete graph K_n
         """
-        edges = [[i,j] for i in range(n) for j in range(i+1,n)]
+        edges = [(i,j) for i in range(n) for j in range(i+1,n)]
         return cls(n, edges, dedu=False)
 
     @classmethod
@@ -59,15 +63,15 @@ class Graph:
         """
         Generate a cycle C_n
         """
-        edges = [[i, (i+1) % n] for i in range(n)]
+        edges = [(i, (i+1) % n) for i in range(n)]
         return cls(n, edges, dedu=False)
 
     def display(self) -> None:
         print(f'v(G) = {self.v}, e(G) = {self.e}, connected components = {self.count_cc()}')
-        print('-' * 10)
+        print(DELIMITER)
         for i in self.vertices:
             print(f'{i}: {self.adjacent[i]}')
-        print('-' * 10)
+        print(DELIMITER)
 
     @property
     def v(self) -> int:
@@ -84,10 +88,10 @@ class Graph:
         return self.count_cc() == 1
 
     # It is annoying that if I write __add_edge here (i.e. set it to be a private method)
-    # then the derived classes cannot access it by super.__add_edge(...)
+    # then the derived classes cannot access it by super().__add_edge(...)
     # Otherwise it would raise an AttributeError that the base class
     # has no attribute '_DirectedGraph__add_edge'
-    def _add_edge(self, pair: List[int], directed: bool = True) -> None:
+    def _add_edge(self, pair: Tuple[int,int], directed: bool = True) -> None:
         """Add a (directed) edge (u,v) to the graph"""
         if len(pair) != 2 or pair[0] == pair[1]:
             raise EdgeError(pair)
@@ -96,7 +100,7 @@ class Graph:
         if not directed:
             self.adjacent[v].append(u)
 
-    def _rm_edge(self, pair: List[int], directed: bool = True) -> None:
+    def _rm_edge(self, pair: Tuple[int,int], directed: bool = True) -> None:
         """
         Remove an edge (u,v) from the graph. If directed == False, remove (v,u) by the way.
         Do nothing if the target does not exist.
@@ -104,7 +108,7 @@ class Graph:
         def rm(u: int, v: int) -> None:
             try:
                 self.adjacent[u].remove(v)
-            except ValueError:
+            except (ValueError, IndexError):
                 pass
 
         if len(pair) != 2 or pair[0] == pair[1]:
@@ -115,10 +119,10 @@ class Graph:
             rm(v,u)
 
     # The two methods below are the real interfaces exposed to the user
-    def add_edge(self, pair: List[int]) -> None:
+    def add_edge(self, pair: Tuple[int,int]) -> None:
         self._add_edge(pair, directed=False)
 
-    def rm_edge(self, pair: List[int]) -> None:
+    def rm_edge(self, pair: Tuple[int,int]) -> None:
         self._rm_edge(pair, directed=False)
 
     def deduplicate(self) -> None:
@@ -192,12 +196,11 @@ class Graph:
         return self.e == self.v - 1 and self.connected
 
 class DirectedGraph(Graph):
-
     """
     The directed graph class, with unweighted edges
     """
 
-    def __init__(self, vnum: int = 1, edges: List[List[int]] = [], dedu: bool = True) -> None:
+    def __init__(self, vnum: int = 1, edges: List[Tuple[int,int]] = [], dedu: bool = True) -> None:
         self.vertices = list(range(vnum))
         self.adjacent: List[List[int]] = [[] for _ in range(vnum)] 
 
@@ -221,10 +224,10 @@ class DirectedGraph(Graph):
         else:
             print('strongly connected = False')
 
-        print('-' * 10)
+        print(DELIMITER)
         for i in self.vertices:
             print(f'{i}: {self.adjacent[i]}')
-        print('-' * 10)
+        print(DELIMITER)
 
     @property
     def v(self) -> int:
@@ -234,11 +237,11 @@ class DirectedGraph(Graph):
         """The number of directed edges in the graph"""
         return sum(len(self.adjacent[i]) for i in self.vertices)
 
-    def add_edge(self, pair: List[int]) -> None:
+    def add_edge(self, pair: Tuple[int, int]) -> None:
         """Add a directed edge."""
         return super()._add_edge(pair)
 
-    def rm_edge(self, pair: List[int]) -> None:
+    def rm_edge(self, pair: Tuple[int, int]) -> None:
         """Remove a directed edge (u,v) from the graph."""
         return super()._rm_edge(pair)
 
@@ -255,7 +258,7 @@ class DirectedGraph(Graph):
         '''
         The graph is strongly connected if and only if 
         both it and its inverse are weakly connected.
-        Consider any pair of vertices (u,v) and the paths between them.
+        - Consider any pair of vertices (u,v) and the paths between them.
         '''
         if self.count_cc() > 1 or inverse(self).count_cc() > 1:
             return False
@@ -292,7 +295,7 @@ class DirectedGraph(Graph):
         the in-degree of the start vertex must be zero because it has no neighbor in 
         or out of the path. After removing it, we can apply induction on v(G).
 
-        The time complexity is reduced to O(m+n) after optimization.
+        The time complexity has been reduced to O(m+n) after optimization.
         """
         indegree = self.getindeg()
         
@@ -303,6 +306,83 @@ class DirectedGraph(Graph):
                 indegree[u] -= 1
         return True
 
+class WeightedGraph(Graph):
+    """
+    Undirected weighted graph class.
+    Duplicated edges are NOT recommended since the weights are saved a in dictionary that
+    uses the tuple of the ends of each edge as its key.
+    """
+
+    def __init__(self, vnum: int = 1, edges: List[Tuple[int,int]] = [], dedu: bool = True,
+                 weights: List[int] = []) -> None:
+        """
+        Return a graph with given weights. Note that default value 1 will be used
+        when there are not enough weights for the edges. On the other hand, 
+        the overlong part may be truncated.
+        """
+        self.vertices = list(range(vnum))
+        self.adjacent: List[List[int]] = [[] for _ in range(vnum)] 
+        self.weights: Dict[Tuple[int,int], int] = dict()
+
+        for i, pair in enumerate(edges):
+            w = weights[i] if i < len(weights) else 1
+            self.add_edge(pair, weight=w)
+        if dedu:
+            self.deduplicate()
+
+    @classmethod
+    def fromrandom(cls, vnum: int = 7, elimit: int = 10, seed: int = -1, a: int = 1, b: int = 10):
+        """
+        Generate a graph with random edges and weights.
+        - Weights are sampled in the close interval [a,b].
+        """
+        res = super().fromrandom(vnum, elimit, seed)
+        for i in res.vertices:
+            for j in res.adjacent[i]:
+                n = random.randint(a,b)
+                res.weights[(i,j)] = n
+                res.weights[(j,i)] = n
+        return res # Remember to return the result after reloading a method from the base class
+
+    @classmethod
+    def fromUnweighted(cls, g: Graph):
+        """Assign weight 1 to the edges of an unweighted graph `g`"""
+        vnum = g.v
+        edges: List[Tuple[int,int]] = list()
+
+        for i in g.vertices:
+            for j in g.adjacent[i]:
+                edges.append((i,j))
+        return cls(vnum, edges)
+    
+    # These two private methods are reserved for the upcoming DirectedWeightedGraph class.
+    def _add_edge(self, pair: Tuple[int, int], directed: bool = True, weight: int = 1) -> None:
+        super()._add_edge(pair, directed=False)
+        self.weights[pair] = self.weights.get(pair,0) + weight
+        rev = (pair[1],pair[0])
+        if not directed:
+            self.weights[rev] = self.weights.get(rev,0) + weight
+
+    def _rm_edge(self, pair: Tuple[int, int], directed: bool = True) -> None:
+        super()._rm_edge(pair, directed=False)
+        if pair in self.weights:
+            del self.weights[pair]
+
+        if not directed and (rev := (pair[1],pair[0])) in self.weights:
+            del self.weights[rev]
+
+    def add_edge(self, pair: Tuple[int, int], weight: int = 1) -> None:
+        """Add an undirected weighted edge."""
+        return self._add_edge(pair, directed=False, weight=weight)
+    def rm_edge(self, pair: Tuple[int, int]) -> None:
+        """Remove an undirected weighted edge."""
+        return self._rm_edge(pair, directed=False)
+
+    def display(self) -> None:
+        super().display()
+        pp(self.weights)
+        print(DELIMITER)
+
 def complement(g: Graph) -> Graph:
     """
     Return the complement graph of g
@@ -312,7 +392,7 @@ def complement(g: Graph) -> Graph:
     res = Graph.complete(vnum)
     for i in range(vnum):
         for j in g.adjacent[i]:
-            res.rm_edge([i,j])
+            res.rm_edge((i,j))
     return res
 
 def inverse(dg: DirectedGraph) -> DirectedGraph:
@@ -320,31 +400,41 @@ def inverse(dg: DirectedGraph) -> DirectedGraph:
     res = DirectedGraph(vnum)
     for i in range(vnum):
         for j in dg.adjacent[i]:
-            res.add_edge([j,i])
+            res.add_edge((j,i))
     return res
 
 if __name__ == "__main__":
-    # g = Graph.fromrandom(12,100,23938)
-    # g.display()
+    g = Graph.fromrandom(12,10,23938)
+    g.display()
     # gc = complement(g)
     # gc.display()
+    # ug = WeightedGraph.fromUnweighted(g)
+    # ug.display()
+    # ug.add_edge((1,2),10)
+    # ug.display()
 
-    # invalid = Graph(7, [[1,2,3]])
+    rug = WeightedGraph.fromrandom(12,10,23938)
+    rug.display()
+    rug.add_edge((1,2),50)
+    rug.rm_edge((9,10))
+    rug.display()
+
+    # invalid = Graph(7, [(1,1)])
     # k = Graph.complete(10)
     # k.display()
 
-    c = Graph.cycle(4)
-    c.display()
-    print(c.NoOddCycle())
-    c.add_edge([0,2])
-    print(c.NoOddCycle())
+    # c = Graph.cycle(4)
+    # c.display()
+    # print(c.NoOddCycle())
+    # c.add_edge((0,2))
+    # print(c.NoOddCycle())
 
-    dg = DirectedGraph.fromrandom(12,30,23938)
-    dg.display()
-    inv = inverse(dg)
-    inv.display()
+    # dg = DirectedGraph.fromrandom(12,30,23938)
+    # dg.display()
+    # inv = inverse(dg)
+    # inv.display()
 
-    # t = DirectedGraph(5,[[0,1],[1,2],[3,4],[4,2]])
+    # t = DirectedGraph(5,[(0,1),(1,2),(3,4),(4,2)])
     # print(t.topo(), t.isDAG())
-    # t.add_edge([2,0])
+    # t.add_edge((2,0))
     # print(t.topo(), t.isDAG())

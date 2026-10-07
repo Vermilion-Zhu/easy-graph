@@ -5,10 +5,10 @@ The utilities and auxiliary functions used in the package, including:
 - Data structures: FindUnionSet
 """
 
-from typing import List, TypeVar, Protocol
+from typing import List, TypeVar, Protocol, Tuple
 
 class EdgeError(Exception):
-    def __init__(self, pair: List[int], *args: object) -> None:
+    def __init__(self, pair: Tuple[int, int], *args: object) -> None:
         self.pair = pair
 
     def __str__(self) -> str:
