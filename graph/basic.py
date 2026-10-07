@@ -2,12 +2,7 @@ import random
 import pprint as pp
 from typing import List, Optional
 
-class EdgeError(Exception):
-    def __init__(self, pair: List[int], *args: object) -> None:
-        self.pair = pair
-
-    def __str__(self) -> str:
-        return f'Each edge must have exactly two different ends, got {self.pair}'
+from utils import EdgeError
 
 class Graph:
 
@@ -106,18 +101,18 @@ class Graph:
         Remove an edge (u,v) from the graph. If directed == False, remove (v,u) by the way.
         Do nothing if the target does not exist.
         """
+        def rm(u: int, v: int) -> None:
+            try:
+                self.adjacent[u].remove(v)
+            except ValueError:
+                pass
+
         if len(pair) != 2 or pair[0] == pair[1]:
             raise EdgeError(pair)
         u, v = pair
-        try:
-            self.adjacent[u].remove(v)
-        except ValueError:
-            pass
+        rm(u,v)
         if not directed:
-            try:
-                self.adjacent[v].remove(u)
-            except ValueError:
-                pass
+            rm(v,u)
 
     # The two methods below are the real interfaces exposed to the user
     def add_edge(self, pair: List[int]) -> None:
