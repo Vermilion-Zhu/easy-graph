@@ -2,26 +2,26 @@ import random
 from pprint import pp
 from typing import List, Dict, Tuple
 
-from utils import EdgeError
+from utils import EdgeError, EdgeType
 
 DELIMITER = '-' * 10
 
 class Graph:
     """
     The basic type of undirected graphs. 
-    Duplicated edges are allowed but not recommended.
+    duplicate edges are allowed but not recommended.
 
     Set m = e(G) and n = v(G) when analyzing the time complexity of algorithms.
     """
 
-    def __init__(self, vnum: int = 1, edges: List[Tuple[int,int]] = [], dedu: bool = True) -> None:
+    def __init__(self, vnum: int = 1, edges: List[EdgeType] = [], dedu: bool = True) -> None:
         self.vertices = list(range(vnum))
         self.adjacent: List[List[int]] = [[] for _ in range(vnum)] 
 
         for pair in edges:
             self._add_edge(pair, directed=False)
         
-        # It is optional to remove the duplicated edges in the adjacent matrix,
+        # It is optional to remove the duplicate edges in the adjacent matrix,
         # which may improve the efficiency in certain cases.
         if dedu:
             self.deduplicate()
@@ -52,17 +52,13 @@ class Graph:
 
     @classmethod
     def complete(cls, n: int):
-        """
-        Generate a complete graph K_n
-        """
+        """Generate a complete graph K_n"""
         edges = [(i,j) for i in range(n) for j in range(i+1,n)]
         return cls(n, edges, dedu=False)
 
     @classmethod
     def cycle(cls, n: int):
-        """
-        Generate a cycle C_n
-        """
+        """Generate a cycle C_n"""
         edges = [(i, (i+1) % n) for i in range(n)]
         return cls(n, edges, dedu=False)
 
@@ -91,7 +87,7 @@ class Graph:
     # then the derived classes cannot access it by super().__add_edge(...)
     # Otherwise it would raise an AttributeError that the base class
     # has no attribute '_DirectedGraph__add_edge'
-    def _add_edge(self, pair: Tuple[int,int], directed: bool = True) -> None:
+    def _add_edge(self, pair: EdgeType, directed: bool = True) -> None:
         """Add a (directed) edge (u,v) to the graph"""
         if len(pair) != 2 or pair[0] == pair[1]:
             raise EdgeError(pair)
@@ -100,7 +96,7 @@ class Graph:
         if not directed:
             self.adjacent[v].append(u)
 
-    def _rm_edge(self, pair: Tuple[int,int], directed: bool = True) -> None:
+    def _rm_edge(self, pair: EdgeType, directed: bool = True) -> None:
         """
         Remove an edge (u,v) from the graph. If directed == False, remove (v,u) by the way.
         Do nothing if the target does not exist.
@@ -119,14 +115,14 @@ class Graph:
             rm(v,u)
 
     # The two methods below are the real interfaces exposed to the user
-    def add_edge(self, pair: Tuple[int,int]) -> None:
+    def add_edge(self, pair: EdgeType) -> None:
         self._add_edge(pair, directed=False)
 
-    def rm_edge(self, pair: Tuple[int,int]) -> None:
+    def rm_edge(self, pair: EdgeType) -> None:
         self._rm_edge(pair, directed=False)
 
     def deduplicate(self) -> None:
-        """Remove the duplicated edges"""
+        """Remove the duplicate edges"""
         for i in self.vertices:
             self.adjacent[i] = list(set(self.adjacent[i]))
 
@@ -195,12 +191,56 @@ class Graph:
         """
         return self.e == self.v - 1 and self.connected
 
+    def induce(self, H: List[int] = [0]):
+        """
+        Return the subgraph induced by the given vertex list H.
+        The out-of-range or duplicate vertices will be ignored.
+        """
+        # pre-process
+        vset = set(H)
+        vlist = [v for v in vset if v < self.v] # pre-process
+        posmap = {v: i for i, v in enumerate(vlist)}
+        edges: List[EdgeType] = list()
+
+        for u in self.vertices:
+            if u in vset:
+                for v in self.adjacent[u]:
+                    if v in vset:
+                        edges.append((posmap[u], posmap[v]))
+        return Graph(len(vlist), edges)
+
+    def SpanningTree(self):
+        """
+        Return a spanning tree of the graph if it is connected.
+        Otherwise raise a ValueError
+        - Every connected graph has a spanning tree.
+        """
+        if not self.connected:
+            raise ValueError("The given graph is not connected.")
+        
+        edges: List[EdgeType] = list()
+        seen = [False] * self.v
+        q: List[int] = list()
+
+        q.append(0)
+        seen[0] = True
+        while q:
+            front = q.pop(0)
+            for v in self.adjacent[front]:
+                if not seen[v]:
+                    edges.append((front, v))
+                    q.append(v)
+                    seen[v] = True
+        res = Graph(self.v, edges)
+        assert(res.isTree()) # for debugging
+        return res
+
 class DirectedGraph(Graph):
     """
     The directed graph class, with unweighted edges
     """
 
-    def __init__(self, vnum: int = 1, edges: List[Tuple[int,int]] = [], dedu: bool = True) -> None:
+    def __init__(self, vnum: int = 1, edges: List[EdgeType] = [], dedu: bool = True) -> None:
         self.vertices = list(range(vnum))
         self.adjacent: List[List[int]] = [[] for _ in range(vnum)] 
 
@@ -237,11 +277,11 @@ class DirectedGraph(Graph):
         """The number of directed edges in the graph"""
         return sum(len(self.adjacent[i]) for i in self.vertices)
 
-    def add_edge(self, pair: Tuple[int, int]) -> None:
+    def add_edge(self, pair: EdgeType) -> None:
         """Add a directed edge."""
         return super()._add_edge(pair)
 
-    def rm_edge(self, pair: Tuple[int, int]) -> None:
+    def rm_edge(self, pair: EdgeType) -> None:
         """Remove a directed edge (u,v) from the graph."""
         return super()._rm_edge(pair)
 
@@ -309,11 +349,11 @@ class DirectedGraph(Graph):
 class WeightedGraph(Graph):
     """
     Undirected weighted graph class.
-    Duplicated edges are NOT recommended since the weights are saved a in dictionary that
+    duplicate edges are NOT recommended since the weights are saved a in dictionary that
     uses the tuple of the ends of each edge as its key.
     """
 
-    def __init__(self, vnum: int = 1, edges: List[Tuple[int,int]] = [], dedu: bool = True,
+    def __init__(self, vnum: int = 1, edges: List[EdgeType] = [], dedu: bool = True,
                  weights: List[int] = []) -> None:
         """
         Return a graph with given weights. Note that default value 1 will be used
@@ -322,7 +362,7 @@ class WeightedGraph(Graph):
         """
         self.vertices = list(range(vnum))
         self.adjacent: List[List[int]] = [[] for _ in range(vnum)] 
-        self.weights: Dict[Tuple[int,int], int] = dict()
+        self.weights: Dict[EdgeType, int] = dict()
 
         for i, pair in enumerate(edges):
             w = weights[i] if i < len(weights) else 1
@@ -348,7 +388,7 @@ class WeightedGraph(Graph):
     def fromUnweighted(cls, g: Graph):
         """Assign weight 1 to the edges of an unweighted graph `g`"""
         vnum = g.v
-        edges: List[Tuple[int,int]] = list()
+        edges: List[EdgeType] = list()
 
         for i in g.vertices:
             for j in g.adjacent[i]:
@@ -356,14 +396,14 @@ class WeightedGraph(Graph):
         return cls(vnum, edges)
     
     # These two private methods are reserved for the upcoming DirectedWeightedGraph class.
-    def _add_edge(self, pair: Tuple[int, int], directed: bool = True, weight: int = 1) -> None:
+    def _add_edge(self, pair: EdgeType, directed: bool = True, weight: int = 1) -> None:
         super()._add_edge(pair, directed=False)
         self.weights[pair] = self.weights.get(pair,0) + weight
         rev = (pair[1],pair[0])
         if not directed:
             self.weights[rev] = self.weights.get(rev,0) + weight
 
-    def _rm_edge(self, pair: Tuple[int, int], directed: bool = True) -> None:
+    def _rm_edge(self, pair: EdgeType, directed: bool = True) -> None:
         super()._rm_edge(pair, directed=False)
         if pair in self.weights:
             del self.weights[pair]
@@ -371,10 +411,10 @@ class WeightedGraph(Graph):
         if not directed and (rev := (pair[1],pair[0])) in self.weights:
             del self.weights[rev]
 
-    def add_edge(self, pair: Tuple[int, int], weight: int = 1) -> None:
+    def add_edge(self, pair: EdgeType, weight: int = 1) -> None:
         """Add an undirected weighted edge."""
         return self._add_edge(pair, directed=False, weight=weight)
-    def rm_edge(self, pair: Tuple[int, int]) -> None:
+    def rm_edge(self, pair: EdgeType) -> None:
         """Remove an undirected weighted edge."""
         return self._rm_edge(pair, directed=False)
 
@@ -404,7 +444,7 @@ def inverse(dg: DirectedGraph) -> DirectedGraph:
     return res
 
 if __name__ == "__main__":
-    g = Graph.fromrandom(12,10,23938)
+    g = Graph.fromrandom(12,100,23938)
     g.display()
     # gc = complement(g)
     # gc.display()
@@ -413,11 +453,11 @@ if __name__ == "__main__":
     # ug.add_edge((1,2),10)
     # ug.display()
 
-    rug = WeightedGraph.fromrandom(12,10,23938)
-    rug.display()
-    rug.add_edge((1,2),50)
-    rug.rm_edge((9,10))
-    rug.display()
+    # rug = WeightedGraph.fromrandom(12,10,23938)
+    # rug.display()
+    # rug.add_edge((1,2),50)
+    # rug.rm_edge((9,10))
+    # rug.display()
 
     # invalid = Graph(7, [(1,1)])
     # k = Graph.complete(10)
@@ -438,3 +478,8 @@ if __name__ == "__main__":
     # print(t.topo(), t.isDAG())
     # t.add_edge((2,0))
     # print(t.topo(), t.isDAG())
+    gid = g.induce(list(range(0,12,2)))
+    gid.display()
+    gt = g.SpanningTree()
+    gt.display()
+    assert(gt.isTree())

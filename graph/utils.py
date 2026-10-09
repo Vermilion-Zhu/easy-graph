@@ -30,3 +30,6 @@ class Comparable(Protocol):
 
 # The supported value types in a node, only integers and strings for now.
 NodeValue = TypeVar('NodeValue', bound=int|str)
+
+# Use a binary as the type of edges for convenience
+EdgeType = Tuple[int, int]
